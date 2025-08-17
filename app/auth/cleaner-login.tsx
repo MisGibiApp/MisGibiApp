@@ -14,11 +14,16 @@ import {
   View,
 } from "react-native";
 
+// ⚠️ Expo Go (gerçek cihaz) için PC'nizin LAN IP'sini yazın (ipconfig → IPv4)
+// Örn: const API = "http://192.168.1.34:4000";
+const API = "http://127.0.0.1:4000";
+
 export default function LoginScreen() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<"customer" | "cleaner">("customer");
+  // ↙️ varsayılan: Temizlikçi
+  const [role, setRole] = useState<"customer" | "cleaner">("cleaner");
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
@@ -40,31 +45,46 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     if (!email || !password) {
-      Alert.alert("Hata", "Lütfen tüm alanları doldurun.");
+      Alert.alert("Hata", "Lütfen e-posta ve şifre girin.");
       return;
     }
 
-    const isValid =
-      (role === "customer" &&
-        email === "customer@example.com" &&
-        password === "123456") ||
-      (role === "cleaner" &&
-        email === "cleaner@example.com" &&
-        password === "123456");
+    try {
+      const res = await fetch(`${API}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
 
-    if (!isValid) {
-      Alert.alert("Hata", "Email veya şifre yanlış.");
-      return;
+      const data = await res.json();
+      if (!res.ok) {
+        Alert.alert("Hata", data?.error || "Giriş başarısız");
+        return;
+      }
+
+      // sunucudan gelen role ile eşitle
+      setRole(data.user.role);
+
+      await AsyncStorage.multiSet([
+        ["loggedIn", "true"],
+        ["token", data.token],
+        ["userId", data.user.id],
+        ["userRole", data.user.role], // "cleaner" | "customer"
+        ["userEmail", data.user.email],
+        ["userName", data.user.name ?? ""],
+      ]);
+
+      router.replace("/tabs");
+    } catch (e) {
+      Alert.alert(
+        "Hata",
+        "Sunucuya bağlanılamadı. (Ağ / IP ayarını kontrol et)"
+      );
     }
-
-    await AsyncStorage.setItem("loggedIn", "true");
-    await AsyncStorage.setItem("userRole", role);
-    router.replace("/tabs");
   };
 
   return (
     <View style={styles.container}>
-      {/* Arka plan video */}
       <Video
         source={require("../../assets/cleaner-bg.mp4")}
         style={[StyleSheet.absoluteFillObject, { zIndex: -1 }]}
@@ -74,12 +94,10 @@ export default function LoginScreen() {
         resizeMode="cover"
       />
 
-      {/* İçerik */}
       <KeyboardAvoidingView
         style={styles.overlay}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        {/* Geri Dön Butonu */}
         <TouchableOpacity
           onPress={() => router.replace("/auth/Welcome")}
           style={styles.backButton}
@@ -89,22 +107,6 @@ export default function LoginScreen() {
 
         {/* Rol Seçim Butonları */}
         <View style={styles.roleContainer}>
-          <TouchableOpacity
-            style={[
-              styles.roleButton,
-              role === "customer" && styles.roleButtonSelected,
-            ]}
-            onPress={() => setRole("customer")}
-          >
-            <Text
-              style={[
-                styles.roleText,
-                role === "customer" && styles.roleTextSelected,
-              ]}
-            >
-              Müşteri
-            </Text>
-          </TouchableOpacity>
           <TouchableOpacity
             style={[
               styles.roleButton,
@@ -119,6 +121,23 @@ export default function LoginScreen() {
               ]}
             >
               Temizlikçi
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.roleButton,
+              role === "customer" && styles.roleButtonSelected,
+            ]}
+            onPress={() => setRole("customer")}
+          >
+            <Text
+              style={[
+                styles.roleText,
+                role === "customer" && styles.roleTextSelected,
+              ]}
+            >
+              Müşteri
             </Text>
           </TouchableOpacity>
         </View>
@@ -180,10 +199,7 @@ const styles = StyleSheet.create({
     left: 20,
     zIndex: 10,
   },
-  backButtonText: {
-    fontSize: 16,
-    color: "#4e81dfff",
-  },
+  backButtonText: { fontSize: 16, color: "#4e81dfff" },
   roleContainer: {
     flexDirection: "row",
     justifyContent: "center",

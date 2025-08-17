@@ -7,9 +7,10 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   Alert,
   Animated,
-  Image,
+  Image, // resolveAssetSource için alias
   KeyboardAvoidingView,
-  Platform,
+  Platform, // JSX'te kullanacağız
+  Image as RNImage,
   ScrollView,
   StyleSheet,
   Text,
@@ -18,8 +19,7 @@ import {
   View,
 } from "react-native";
 import { sehirler } from "../../app/constants/sehirler";
-import defaultAvatars from "../constants/defaultAvatars";
-// male.png & female.png
+import defaultAvatars from "../constants/defaultAvatars"; // { male: require(...), female: require(...) }
 
 export default function CleanerSignup() {
   const router = useRouter();
@@ -65,6 +65,17 @@ export default function CleanerSignup() {
     }
   }, [city]);
 
+  // (Opsiyonel) Galeri izni
+  useEffect(() => {
+    (async () => {
+      const { status } =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("İzin gerekli", "Galeriye erişim izni vermelisiniz.");
+      }
+    })();
+  }, []);
+
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -87,10 +98,9 @@ export default function CleanerSignup() {
       return;
     }
 
-    <Image
-      source={profileImage ? { uri: profileImage } : defaultAvatars[gender]}
-      style={styles.profileImage}
-    />;
+    // Kullanıcı seçmediyse default avatarın URI’sini al
+    const finalProfileImage =
+      profileImage || RNImage.resolveAssetSource(defaultAvatars[gender]).uri;
 
     await AsyncStorage.setItem("loggedIn", "true");
     await AsyncStorage.setItem("userRole", "cleaner");
@@ -136,7 +146,10 @@ export default function CleanerSignup() {
           {/* Profil Resmi */}
           <TouchableOpacity style={styles.imagePicker} onPress={pickImage}>
             <Image
-              source={{ uri: profileImage || defaultAvatars[gender] }}
+              // ÖNEMLİ: default avatar require, seçilmiş foto uri
+              source={
+                profileImage ? { uri: profileImage } : defaultAvatars[gender]
+              }
               style={styles.profileImage}
             />
           </TouchableOpacity>

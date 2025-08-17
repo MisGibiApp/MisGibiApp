@@ -1,0 +1,41 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String   @id @default(cuid())
+  role            Role
+  name            String
+  email           String   @unique
+  passwordHash    String
+  profileImageUrl String?
+  basePrice       Int?
+  createdAt       DateTime @default(now())
+
+  offersSent     Offer[] @relation("CustomerOffers")
+  offersReceived Offer[] @relation("CleanerOffers")
+}
+
+model Offer {
+  id        String   @id @default(cuid())
+  price     Int
+  note      String?
+  createdAt DateTime @default(now())
+
+  customer   User   @relation("CustomerOffers", fields: [customerId], references: [id])
+  customerId String
+
+  cleaner   User   @relation("CleanerOffers", fields: [cleanerId], references: [id])
+  cleanerId String
+}
+
+enum Role {
+  customer
+  cleaner
+}
