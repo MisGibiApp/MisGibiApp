@@ -31,7 +31,8 @@ export function authRoutes(prisma: PrismaClient) {
       select: { id: true, role: true, name: true, email: true, profileImageUrl: true, basePrice: true },
     });
 
-    const token = signToken({ id: user.id, role: user.role });
+   const token = signToken({ sub: user.id, role: user.role, email: user.email });
+
     res.json({ token, user });
   });
 

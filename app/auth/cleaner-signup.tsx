@@ -7,9 +7,9 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   Alert,
   Animated,
-  Image, // resolveAssetSource için alias
+  Image,
   KeyboardAvoidingView,
-  Platform, // JSX'te kullanacağız
+  Platform,
   Image as RNImage,
   ScrollView,
   StyleSheet,
@@ -19,7 +19,8 @@ import {
   View,
 } from "react-native";
 import { sehirler } from "../../app/constants/sehirler";
-import defaultAvatars from "../constants/defaultAvatars"; // { male: require(...), female: require(...) }
+import defaultAvatars from "../constants/defaultAvatars";
+import { api, registerUser } from "../lib/api"; // ✅ backend api import
 
 export default function CleanerSignup() {
   const router = useRouter();
@@ -65,7 +66,6 @@ export default function CleanerSignup() {
     }
   }, [city]);
 
-  // (Opsiyonel) Galeri izni
   useEffect(() => {
     (async () => {
       const { status } =
@@ -92,26 +92,51 @@ export default function CleanerSignup() {
     else setRegions([...regions, region]);
   };
 
+  // ✅ Düzeltilmiş handleSignup
   const handleSignup = async () => {
     if (!name || !email || !password || !district || regions.length === 0) {
       Alert.alert("Hata", "Lütfen tüm alanları doldurun.");
       return;
     }
 
-    // Kullanıcı seçmediyse default avatarın URI’sini al
-    const finalProfileImage =
-      profileImage || RNImage.resolveAssetSource(defaultAvatars[gender]).uri;
+    try {
+      const finalProfileImage =
+        profileImage || RNImage.resolveAssetSource(defaultAvatars[gender]).uri;
 
-    await AsyncStorage.setItem("loggedIn", "true");
-    await AsyncStorage.setItem("userRole", "cleaner");
-    await AsyncStorage.setItem("cleanerName", name);
-    await AsyncStorage.setItem("cleanerCity", city);
-    await AsyncStorage.setItem("cleanerDistrict", district);
-    await AsyncStorage.setItem("cleanerRegions", JSON.stringify(regions));
-    await AsyncStorage.setItem("cleanerProfileImage", finalProfileImage);
-    await AsyncStorage.setItem("cleanerGender", gender);
+      // 1) auth/register
+      const res = await registerUser({
+        role: "cleaner",
+        name,
+        email,
+        password,
+      });
 
-    router.replace("/tabs");
+      await AsyncStorage.setItem("token", res.token);
+      await AsyncStorage.setItem("loggedIn", "true");
+      await AsyncStorage.setItem("userRole", "cleaner");
+      await AsyncStorage.setItem("userEmail", email);
+      await AsyncStorage.setItem("userName", name);
+
+      // 2) profile/cleaner
+      await api.post(
+        "/profile/cleaner",
+        {
+          city,
+          district,
+          regions,
+          gender,
+          basePrice: 500,
+          profileImageUrl: finalProfileImage,
+        },
+        { headers: { Authorization: `Bearer ${res.token}` } }
+      );
+
+      // 3) yönlendir
+      router.replace("/tabs");
+    } catch (err: any) {
+      console.error("Signup Error:", err);
+      Alert.alert("Kayıt Hatası", "Sunucuya kaydedilemedi.");
+    }
   };
 
   return (
@@ -143,10 +168,8 @@ export default function CleanerSignup() {
           behavior={Platform.OS === "ios" ? "padding" : undefined}
           style={{ width: "100%", alignItems: "center" }}
         >
-          {/* Profil Resmi */}
           <TouchableOpacity style={styles.imagePicker} onPress={pickImage}>
             <Image
-              // ÖNEMLİ: default avatar require, seçilmiş foto uri
               source={
                 profileImage ? { uri: profileImage } : defaultAvatars[gender]
               }
@@ -154,7 +177,6 @@ export default function CleanerSignup() {
             />
           </TouchableOpacity>
 
-          {/* Cinsiyet Seçimi */}
           <View style={styles.genderContainer}>
             <TouchableOpacity
               style={[
@@ -216,7 +238,6 @@ export default function CleanerSignup() {
             onChangeText={setPassword}
           />
 
-          {/* Şehir */}
           <View style={styles.pickerContainer}>
             <Text style={styles.pickerLabel}>Şehir:</Text>
             <Picker
@@ -230,7 +251,6 @@ export default function CleanerSignup() {
             </Picker>
           </View>
 
-          {/* Bölgeler */}
           <Text style={styles.sectionTitle}>
             Çalışmak İstediğiniz Bölgeler:
           </Text>
