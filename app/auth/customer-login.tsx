@@ -13,6 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { api } from "../lib/api"; // ✅ backend api import
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -38,28 +39,30 @@ export default function LoginScreen() {
     ]).start();
   }, []);
 
+  // ✅ Backend login
   const handleLogin = async () => {
     if (!email || !password) {
       Alert.alert("Hata", "Lütfen tüm alanları doldurun.");
       return;
     }
 
-    const isValid =
-      (role === "customer" &&
-        email === "customer@example.com" &&
-        password === "123456") ||
-      (role === "cleaner" &&
-        email === "cleaner@example.com" &&
-        password === "123456");
+    try {
+      const res = await api.post("/auth/login", { email, password });
 
-    if (!isValid) {
-      Alert.alert("Hata", "Email veya şifre yanlış.");
-      return;
+      await AsyncStorage.setItem("token", res.data.token);
+      await AsyncStorage.setItem("loggedIn", "true");
+      await AsyncStorage.setItem("userRole", role);
+      await AsyncStorage.setItem("userEmail", res.data.user.email);
+      await AsyncStorage.setItem("userName", res.data.user.name);
+
+      router.replace("/tabs");
+    } catch (err: any) {
+      console.error("Login error:", err?.response?.data || err.message);
+      Alert.alert(
+        "Giriş Hatası",
+        JSON.stringify(err?.response?.data || err.message)
+      );
     }
-
-    await AsyncStorage.setItem("loggedIn", "true");
-    await AsyncStorage.setItem("userRole", role);
-    router.replace("/tabs");
   };
 
   return (

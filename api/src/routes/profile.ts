@@ -7,28 +7,29 @@ import { requireRole } from "../middleware/role";
 export default function profileRoutes(prisma: PrismaClient) {
   const r = Router();
 
-  // ---- Schemas ----
-  const phoneRegex = /^(\+?\d{1,3})?[\s.-]?\d{10,14}$/; // basit kontrol, istersen kaldır/özelleştir
+  const phoneRegex = /^(\+?\d{1,3})?[\s.-]?\d{10,14}$/;
 
-const CleanerProfileSchema = z.object({
-  city: z.string().min(1),
-  district: z.string().min(1),
-  regions: z.array(z.string()).min(1),
-  gender: z.nativeEnum(Gender), // <-- artık Prisma'nın enumunu kullanıyor
-  basePrice: z.number().int().positive().optional(),
-  profileImageUrl: z.string().url().optional(),
-  phone: z.string().optional(),
-});
+  // ----------------- SCHEMAS -----------------
+  const CleanerProfileSchema = z.object({
+    city: z.string().min(1),
+    district: z.string().min(1),
+    regions: z.array(z.string()).min(1),
+    gender: z.nativeEnum(Gender),
+    basePrice: z.number().int().positive().optional(),
+    profileImageUrl: z.string().url().optional(),
+    phone: z.string().optional(),
+  });
 
   const CustomerProfileSchema = z.object({
     city: z.string().min(1),
     district: z.string().min(1),
-    street: z.string().min(1),
+    regions: z.array(z.string()).min(1),
+    gender: z.nativeEnum(Gender),
     phone: z.string().regex(phoneRegex, "Invalid phone number").optional(),
     profileImageUrl: z.string().url().optional(),
   });
 
-  // ---- CLEANER profilini güncelle ----
+  // ----------------- CLEANER PROFİL -----------------
   r.post("/cleaner", requireAuth, requireRole("cleaner"), async (req, res) => {
     const p = CleanerProfileSchema.safeParse(req.body);
     if (!p.success) {
@@ -38,49 +39,28 @@ const CleanerProfileSchema = z.object({
       });
     }
 
-    const userId = (req as any).user.id as string;
+    const userIdRaw = (req as any).user?.id;
+    const userId = Number(userIdRaw);
+    if (!userId || isNaN(userId)) {
+      return res.status(401).json({ error: "Invalid user id from token" });
+    }
+
     const { city, district, regions, gender, basePrice, profileImageUrl, phone } = p.data;
 
     try {
       const updated = await prisma.user.update({
         where: { id: userId },
-        data: {
-          city,
-          district,
-          regionsJson: JSON.stringify(regions),
-          gender: gender as Gender,
-          basePrice,
-          profileImageUrl,
-          phone,
-        },
-        select: {
-          id: true,
-          role: true,
-          name: true,
-          email: true,
-          city: true,
-          district: true,
-          gender: true,
-          basePrice: true,
-          profileImageUrl: true,
-          phone: true,
-          // regionsJson'ı seçmiyoruz; aşağıda parse edip "regions" olarak ekleyeceğiz
-        },
+        data: { city, district, regions, gender, basePrice, profileImageUrl, phone },
       });
 
-      // regions alanını hydrate et
-      const regionsParsed = regions; // zaten elimizde request’ten de var
-      return res.json({ user: { ...updated, regions: regionsParsed } });
+      return res.json({ user: updated });
     } catch (e: any) {
-      if (e?.code === "P2002") {
-        // örn: phone unique ihlali
-        return res.status(409).json({ error: "Unique constraint failed (probably phone already used)" });
-      }
+      console.error("Cleaner profile update error:", e);
       return res.status(500).json({ error: "Server error" });
     }
   });
 
-  // ---- CUSTOMER profilini güncelle ----
+  // ----------------- CUSTOMER PROFİL -----------------
   r.post("/customer", requireAuth, requireRole("customer"), async (req, res) => {
     const p = CustomerProfileSchema.safeParse(req.body);
     if (!p.success) {
@@ -90,37 +70,60 @@ const CleanerProfileSchema = z.object({
       });
     }
 
-    const userId = (req as any).user.id as string;
-    const { city, district, street, phone, profileImageUrl } = p.data;
+    const userIdRaw = (req as any).user?.id;
+    const userId = Number(userIdRaw);
+    if (!userId || isNaN(userId)) {
+      return res.status(401).json({ error: "Invalid user id from token" });
+    }
+
+    const { city, district, regions, gender, phone, profileImageUrl } = p.data;
 
     try {
       const updated = await prisma.user.update({
         where: { id: userId },
-        data: {
-          city,
-          district,
-          street,
-          phone,
-          profileImageUrl,
-        },
+        data: { city, district, regions, gender, phone, profileImageUrl },
+      });
+
+      return res.json({ user: updated });
+    } catch (e: any) {
+      console.error("Customer profile update error:", e);
+      return res.status(500).json({ error: "Server error" });
+    }
+  });
+
+  // ----------------- ME ENDPOINT -----------------
+  r.get("/me", requireAuth, async (req, res) => {
+    try {
+      const userIdRaw = (req as any).user?.id;
+      const userId = Number(userIdRaw);
+      if (!userId || isNaN(userId)) {
+        return res.status(401).json({ error: "Invalid user id from token" });
+      }
+
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
         select: {
           id: true,
           role: true,
           name: true,
           email: true,
+          phone: true,
           city: true,
           district: true,
           street: true,
-          phone: true,
           profileImageUrl: true,
+          gender: true,
+          regions: true,
         },
       });
 
-      return res.json({ user: updated });
-    } catch (e: any) {
-      if (e?.code === "P2002") {
-        return res.status(409).json({ error: "Unique constraint failed (probably phone already used)" });
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
       }
+
+      return res.json(user);
+    } catch (e: any) {
+      console.error("Fetch /me error:", e);
       return res.status(500).json({ error: "Server error" });
     }
   });

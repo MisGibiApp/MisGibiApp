@@ -4,61 +4,134 @@ import { Router } from "express";
 import { z } from "zod";
 import { signToken } from "../utils/jwt";
 
-// 🔁 default yerine named export
 export function authRoutes(prisma: PrismaClient) {
   const r = Router();
 
-  const Register = z.object({
+  // -------------------------------
+  // 📌 Register schema
+  // -------------------------------
+  const RegisterSchema = z.object({
     role: z.enum(["customer", "cleaner"]),
-    name: z.string().min(2),
-    email: z.string().email(),
-    password: z.string().min(6),
-    profileImageUrl: z.string().optional(),
-    basePrice: z.number().optional(),
+    name: z.string().min(2, "İsim en az 2 karakter olmalı"),
+    email: z.string().email("Geçerli bir e-posta girin"),
+    password: z.string().min(6, "Şifre en az 6 karakter olmalı"),
+    profileImageUrl: z.string().url().optional(),
+    basePrice: z.number().int().positive().optional(),
   });
 
+  // -------------------------------
+  // 📌 Register endpoint
+  // -------------------------------
   r.post("/register", async (req, res) => {
-    const p = Register.safeParse(req.body);
-    if (!p.success) return res.status(400).json(p.error);
-    const { email, password, role, name, profileImageUrl, basePrice } = p.data;
+    const parsed = RegisterSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: "Validation failed",
+        details: parsed.error.flatten(),
+      });
+    }
 
-    const exists = await prisma.user.findUnique({ where: { email } });
-    if (exists) return res.status(409).json({ error: "Email already used" });
+    const { email, password, role, name, profileImageUrl, basePrice } =
+      parsed.data;
 
-    const passwordHash = bcrypt.hashSync(password, 10);
-    const user = await prisma.user.create({
-      data: { role: role as Role, name, email, passwordHash, profileImageUrl, basePrice },
-      select: { id: true, role: true, name: true, email: true, profileImageUrl: true, basePrice: true },
-    });
+    try {
+      const exists = await prisma.user.findUnique({ where: { email } });
+      if (exists) {
+        return res.status(409).json({ error: "Email already used" });
+      }
 
-   const token = signToken({ sub: user.id, role: user.role, email: user.email });
+      const passwordHash = await bcrypt.hash(password, 10);
 
-    res.json({ token, user });
+      const user = await prisma.user.create({
+        data: {
+          role: role as Role,
+          name,
+          email,
+          passwordHash,
+          profileImageUrl,
+          basePrice,
+        },
+      });
+
+      // ⚡ sub'ı string'e çeviriyoruz
+      const token = signToken({
+        id: String(user.id),
+        role: user.role,
+        email: user.email,
+      });
+
+      return res.json({
+        token,
+        user: {
+          id: user.id,
+          role: user.role,
+          name: user.name,
+          email: user.email,
+          profileImageUrl: user.profileImageUrl,
+          basePrice: user.basePrice,
+        },
+      });
+    } catch (err) {
+      console.error("Register error:", err);
+      return res.status(500).json({ error: "Server error" });
+    }
   });
 
-  const Login = z.object({ email: z.string().email(), password: z.string().min(6) });
+  // -------------------------------
+  // 📌 Login schema
+  // -------------------------------
+  const LoginSchema = z.object({
+    email: z.string().email("Geçerli bir e-posta girin"),
+    password: z.string().min(6, "Şifre en az 6 karakter olmalı"),
+  });
 
+  // -------------------------------
+  // 📌 Login endpoint
+  // -------------------------------
   r.post("/login", async (req, res) => {
-    const p = Login.safeParse(req.body);
-    if (!p.success) return res.status(400).json(p.error);
-    const { email, password } = p.data;
+    const parsed = LoginSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: "Validation failed",
+        details: parsed.error.flatten(),
+      });
+    }
 
-    const user = await prisma.user.findUnique({ where: { email } });
-    if (!user || !bcrypt.compareSync(password, user.passwordHash))
-      return res.status(401).json({ error: "Invalid credentials" });
+    const { email, password } = parsed.data;
 
-    const token = signToken({ id: user.id, role: user.role });
-    res.json({
-      token,
-      user: {
-        id: user.id,
+    try {
+      const user = await prisma.user.findUnique({ where: { email } });
+      if (!user) {
+        return res.status(401).json({ error: "Invalid credentials" });
+      }
+
+      const valid = await bcrypt.compare(password, user.passwordHash);
+      if (!valid) {
+        return res.status(401).json({ error: "Invalid credentials" });
+      }
+
+      // ⚡ yine string'e çeviriyoruz
+      const token = signToken({
+        id: String(user.id),
         role: user.role,
-        name: user.name,
         email: user.email,
-        profileImageUrl: user.profileImageUrl,
-        basePrice: user.basePrice,
-      },
-    });
+      });
+
+      return res.json({
+        token,
+        user: {
+          id: user.id,
+          role: user.role,
+          name: user.name,
+          email: user.email,
+          profileImageUrl: user.profileImageUrl,
+          basePrice: user.basePrice,
+        },
+      });
+    } catch (err) {
+      console.error("Login error:", err);
+      return res.status(500).json({ error: "Server error" });
+    }
   });
 
   return r;

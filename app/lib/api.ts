@@ -1,7 +1,6 @@
-// app/lib/api.ts
 import axios from "axios";
 
-const BASE_URL = "http://192.168.0.42:4000"; // ✅ PC’nin IP adresi
+const BASE_URL = "http://192.168.0.42:4000"; // ✅ PC’nin IP’si
 
 export const api = axios.create({
   baseURL: BASE_URL,

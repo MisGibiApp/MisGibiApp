@@ -14,9 +14,7 @@ import {
   View,
 } from "react-native";
 
-// ⚠️ Expo Go (gerçek cihaz) için PC'nizin LAN IP'sini yazın (ipconfig → IPv4)
-// Örn: const API = "http://192.168.1.34:4000";
-const API = "http://127.0.0.1:4000";
+const API = "http://192.168.0.42:4000";
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -56,9 +54,22 @@ export default function LoginScreen() {
         body: JSON.stringify({ email, password }),
       });
 
-      const data = await res.json();
-      if (!res.ok) {
-        Alert.alert("Hata", data?.error || "Giriş başarısız");
+      // 🔒 JSON güvenli parse
+      const text = await res.text();
+      let data: any;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        console.error("Sunucudan JSON gelmedi:", text);
+        Alert.alert("Sunucu Hatası", "Beklenmedik cevap alındı.");
+        return;
+      }
+
+      if (!res.ok || !data?.user) {
+        Alert.alert(
+          "Giriş Başarısız.",
+          data?.error || "E-posta veya Şifre hatalı."
+        );
         return;
       }
 
@@ -68,8 +79,8 @@ export default function LoginScreen() {
       await AsyncStorage.multiSet([
         ["loggedIn", "true"],
         ["token", data.token],
-        ["userId", data.user.id],
-        ["userRole", data.user.role], // "cleaner" | "customer"
+        ["userId", String(data.user.id)], // id sayısal olabilir
+        ["userRole", data.user.role],
         ["userEmail", data.user.email],
         ["userName", data.user.name ?? ""],
       ]);

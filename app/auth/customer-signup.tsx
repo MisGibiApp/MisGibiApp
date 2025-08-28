@@ -2,7 +2,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Picker } from "@react-native-picker/picker";
 import { Video } from "expo-av";
 import * as ImagePicker from "expo-image-picker";
-import * as Location from "expo-location";
 import { useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -21,6 +20,7 @@ import {
 } from "react-native";
 import { sehirler } from "../../app/constants/sehirler";
 import defaultAvatars from "../constants/defaultAvatars";
+import { api, registerUser } from "../lib/api";
 
 export default function CustomerSignup() {
   const router = useRouter();
@@ -28,12 +28,10 @@ export default function CustomerSignup() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [phone, setPhone] = useState(""); // << telefon
   const [city, setCity] = useState("İstanbul");
   const [district, setDistrict] = useState("");
-  const [possibleDistricts, setPossibleDistricts] = useState<string[]>([]);
-  const [street, setStreet] = useState("");
-
+  const [possibleRegions, setPossibleRegions] = useState<string[]>([]);
+  const [regions, setRegions] = useState<string[]>([]);
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [gender, setGender] = useState<"male" | "female">("male");
 
@@ -55,37 +53,30 @@ export default function CustomerSignup() {
     ]).start();
   }, []);
 
-  // Şehir değişince ilçe seçeneklerini hazırla
+  // Şehir seçildiğinde ilçeleri getir
   useEffect(() => {
     const selectedCity = sehirler.find((s) => s.name === city);
     if (selectedCity && selectedCity.districts.length > 0) {
-      setPossibleDistricts(selectedCity.districts);
-      setDistrict((prev) =>
-        selectedCity.districts.includes(prev) ? prev : selectedCity.districts[0]
-      );
+      setPossibleRegions(selectedCity.districts);
+      setDistrict(selectedCity.districts[0]);
+      setRegions([]);
     } else {
-      setPossibleDistricts([]);
+      setPossibleRegions([]);
       setDistrict("");
+      setRegions([]);
     }
   }, [city]);
 
-  // Konumdan adres doldurma (opsiyonel)
   useEffect(() => {
     (async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") return;
-
-      const location = await Location.getCurrentPositionAsync({});
-      const [placemark] = await Location.reverseGeocodeAsync(location.coords);
-      if (placemark) {
-        if (placemark.city) setCity(placemark.city);
-        if (placemark.subregion) setDistrict(placemark.subregion);
-        if (placemark.street) setStreet(placemark.street);
+      const { status } =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("İzin gerekli", "Galeriye erişim izni vermelisiniz.");
       }
     })();
   }, []);
 
-  // Galeriden profil resmi seçimi (opsiyonel)
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -96,36 +87,59 @@ export default function CustomerSignup() {
     if (!result.canceled) setProfileImage(result.assets[0].uri);
   };
 
+  const toggleRegion = (region: string) => {
+    if (regions.includes(region))
+      setRegions(regions.filter((r) => r !== region));
+    else setRegions([...regions, region]);
+  };
+
+  // ✅ Customer signup
   const handleSignup = async () => {
-    // Temel doğrulamalar
-    if (!name || !email || !password || !city || !district || !street) {
+    if (!name || !email || !password || !district || regions.length === 0) {
       Alert.alert("Hata", "Lütfen tüm alanları doldurun.");
       return;
     }
-    // Telefon doğrulama (Türkiye: 10 hane)
-    if (!phone || phone.length !== 10) {
-      Alert.alert("Hata", "Geçerli bir telefon numarası girin (10 hane).");
-      return;
+
+    try {
+      const finalProfileImage =
+        profileImage || RNImage.resolveAssetSource(defaultAvatars[gender]).uri;
+
+      // 1) auth/register
+      const res = await registerUser({
+        role: "customer",
+        name,
+        email,
+        password,
+      });
+
+      await AsyncStorage.setItem("token", res.token);
+      await AsyncStorage.setItem("loggedIn", "true");
+      await AsyncStorage.setItem("userRole", "customer");
+      await AsyncStorage.setItem("userEmail", email);
+      await AsyncStorage.setItem("userName", name);
+
+      // 2) profile/customer
+      await api.post(
+        "/profile/customer",
+        {
+          city,
+          district,
+          regions, // 👈 çoklu seçim
+          gender,
+          profileImageUrl: finalProfileImage,
+        },
+        { headers: { Authorization: `Bearer ${res.token}` } }
+      );
+
+      // 3) yönlendir
+      router.replace("/tabs");
+    } catch (err: any) {
+      console.error("Signup Error:", err?.response?.data || err.message);
+      Alert.alert(
+        "Kayıt Hatası",
+        JSON.stringify(err?.response?.data || err.message)
+      );
     }
-    const formattedPhone = "+90" + phone;
-
-    // Fotoğraf: seçili yoksa default avatarın URI'sini kaydet
-    const finalProfileImage =
-      profileImage || RNImage.resolveAssetSource(defaultAvatars[gender]).uri;
-
-    // Kaydet
-    await AsyncStorage.setItem("loggedIn", "true");
-    await AsyncStorage.setItem("userRole", "customer");
-    await AsyncStorage.setItem("customerName", name);
-    await AsyncStorage.setItem("customerEmail", email);
-    await AsyncStorage.setItem("customerCity", city);
-    await AsyncStorage.setItem("customerDistrict", district);
-    await AsyncStorage.setItem("customerStreet", street);
-    await AsyncStorage.setItem("customerGender", gender);
-    await AsyncStorage.setItem("customerProfileImage", finalProfileImage);
-    await AsyncStorage.setItem("customerPhone", formattedPhone); // << telefon kaydı
-
-    router.replace("/tabs");
   };
 
   return (
@@ -141,15 +155,12 @@ export default function CustomerSignup() {
 
       <ScrollView contentContainerStyle={styles.overlay}>
         <TouchableOpacity
-          onPress={() => router.back()} // istersen: () => router.replace("/auth/Welcome")
+          onPress={() => router.replace("/auth/Welcome")}
           style={styles.backButton}
         >
           <Text style={styles.backButtonText}>← Geri Dön</Text>
         </TouchableOpacity>
 
-        <Animated.View
-          style={{ opacity: fadeAnim, transform: [{ scale: scaleAnim }] }}
-        ></Animated.View>
         <Animated.View
           style={{ opacity: fadeAnim, transform: [{ scale: scaleAnim }] }}
         >
@@ -160,7 +171,6 @@ export default function CustomerSignup() {
           behavior={Platform.OS === "ios" ? "padding" : undefined}
           style={{ width: "100%", alignItems: "center" }}
         >
-          {/* Profil Resmi */}
           <TouchableOpacity style={styles.imagePicker} onPress={pickImage}>
             <Image
               source={
@@ -170,8 +180,7 @@ export default function CustomerSignup() {
             />
           </TouchableOpacity>
 
-          {/* Cinsiyet */}
-          <View className="genderContainer" style={styles.genderContainer}>
+          <View style={styles.genderContainer}>
             <TouchableOpacity
               style={[
                 styles.genderButton,
@@ -207,7 +216,6 @@ export default function CustomerSignup() {
             </TouchableOpacity>
           </View>
 
-          {/* Form alanları */}
           <TextInput
             style={styles.input}
             placeholder="Ad Soyad"
@@ -233,18 +241,6 @@ export default function CustomerSignup() {
             onChangeText={setPassword}
           />
 
-          {/* Telefon */}
-          <TextInput
-            style={styles.input}
-            placeholder="Telefon Numarası (5XXXXXXXXX)"
-            placeholderTextColor="#eee"
-            keyboardType="phone-pad"
-            value={phone}
-            onChangeText={(t) => setPhone(t.replace(/[^0-9]/g, ""))} // sadece rakam
-            maxLength={10} // Türkiye: 10 hane
-          />
-
-          {/* Şehir */}
           <View style={styles.pickerContainer}>
             <Text style={styles.pickerLabel}>Şehir:</Text>
             <Picker
@@ -258,27 +254,23 @@ export default function CustomerSignup() {
             </Picker>
           </View>
 
-          {/* İlçe */}
-          <View style={styles.pickerContainer}>
-            <Text style={styles.pickerLabel}>İlçe:</Text>
-            <Picker
-              selectedValue={district}
-              onValueChange={(v) => setDistrict(v)}
-              style={styles.picker}
-            >
-              {possibleDistricts.map((d) => (
-                <Picker.Item key={d} label={d} value={d} />
-              ))}
-            </Picker>
+          <Text style={styles.sectionTitle}>Yaşadığınız Bölgeler:</Text>
+          <View style={styles.regionsContainer}>
+            {possibleRegions.map((r) => (
+              <TouchableOpacity
+                key={r}
+                style={[
+                  styles.regionButton,
+                  regions.includes(r) && styles.regionButtonSelected,
+                ]}
+                onPress={() => toggleRegion(r)}
+              >
+                <Text style={{ color: regions.includes(r) ? "#fff" : "#000" }}>
+                  {r}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
-
-          <TextInput
-            style={styles.input}
-            placeholder="Sokak / Cadde / Ev No"
-            placeholderTextColor="#eee"
-            value={street}
-            onChangeText={setStreet}
-          />
 
           <TouchableOpacity style={styles.button} onPress={handleSignup}>
             <Text style={styles.buttonText}>Kayıt Ol</Text>
@@ -302,12 +294,14 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.4)",
     paddingVertical: 50,
   },
+  backButton: { position: "absolute", top: 50, left: 20, zIndex: 10 },
+  backButtonText: { fontSize: 16, color: "#4e81dfff" },
   title: {
     fontSize: 32,
     fontWeight: "800",
     color: "#fff",
     textAlign: "center",
-    marginBottom: 30,
+    marginBottom: 20,
     textShadowColor: "#000",
     textShadowOffset: { width: 2, height: 2 },
     textShadowRadius: 10,
@@ -339,7 +333,6 @@ const styles = StyleSheet.create({
   genderSelected: { backgroundColor: "#4e73df", borderColor: "#4e73df" },
   genderText: { color: "#fff", fontWeight: "600" },
   genderTextSelected: { color: "#fff" },
-
   input: {
     width: "85%",
     backgroundColor: "rgba(255,255,255,0.2)",
@@ -357,6 +350,27 @@ const styles = StyleSheet.create({
   },
   pickerLabel: { color: "#fff", marginLeft: 15, marginTop: 5 },
   picker: { color: "#fff", width: "100%" },
+  sectionTitle: {
+    color: "#fff",
+    fontWeight: "600",
+    marginTop: 15,
+    marginBottom: 5,
+  },
+  regionsContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+  },
+  regionButton: {
+    borderWidth: 1,
+    borderColor: "#fff",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    margin: 5,
+    backgroundColor: "rgba(255,255,255,0.3)",
+  },
+  regionButtonSelected: { backgroundColor: "#4e73df", borderColor: "#4e73df" },
   button: {
     backgroundColor: "#4e73df",
     paddingVertical: 12,
@@ -371,6 +385,4 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   linkText: { color: "#eee", marginTop: 10, textDecorationLine: "underline" },
-  backButton: { position: "absolute", top: 50, left: 20, zIndex: 10 },
-  backButtonText: { fontSize: 16, color: "#4e81dfff" },
 });

@@ -8,21 +8,20 @@ datasource db {
 }
 
 model User {
-  id              String   @id @default(cuid())
-  role            Role
-  name            String
+  id              Int      @id @default(autoincrement())
   email           String   @unique
   passwordHash    String
+  role            Role
+  name            String
   profileImageUrl String?
   basePrice       Int?
+  phone           String?  @unique
+  gender          Gender?
+  city            String?
+  district        String?
+  street          String?
+  regions         Json?       // bölgeleri JSON array olarak saklıyoruz
   createdAt       DateTime @default(now())
-
-  phone       String? @unique
-  gender      Gender?
-  city        String?
-  district    String?
-  street      String?
-  regionsJson String?
 
   offersSent     Offer[] @relation("CustomerOffers")
   offersReceived Offer[] @relation("CleanerOffers")
@@ -34,11 +33,11 @@ model Offer {
   note      String?
   createdAt DateTime @default(now())
 
-  customer   User   @relation("CustomerOffers", fields: [customerId], references: [id])
-  customerId String
+  customer   User @relation("CustomerOffers", fields: [customerId], references: [id])
+  customerId Int
 
-  cleaner   User   @relation("CleanerOffers", fields: [cleanerId], references: [id])
-  cleanerId String
+  cleaner    User @relation("CleanerOffers", fields: [cleanerId], references: [id])
+  cleanerId  Int
 }
 
 enum Role {

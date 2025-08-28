@@ -108,7 +108,7 @@ export default function CleanerSignup() {
         role: "cleaner",
         name,
         email,
-        password,
+        password, // ✅ sadece password gönderiyoruz
       });
 
       await AsyncStorage.setItem("token", res.token);
@@ -134,8 +134,11 @@ export default function CleanerSignup() {
       // 3) yönlendir
       router.replace("/tabs");
     } catch (err: any) {
-      console.error("Signup Error:", err);
-      Alert.alert("Kayıt Hatası", "Sunucuya kaydedilemedi.");
+      console.error("Signup Error:", err?.response?.data || err.message);
+      Alert.alert(
+        "Kayıt Hatası",
+        JSON.stringify(err?.response?.data || err.message)
+      );
     }
   };
 
