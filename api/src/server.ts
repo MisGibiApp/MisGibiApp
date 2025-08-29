@@ -18,14 +18,34 @@ app.use(express.json());
 // Health
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
-// Cleaner list
-app.get("/cleaners", async (_req, res) => {
-  const cleaners = await prisma.user.findMany({
-    where: { role: "cleaner" },
-    select: { id: true, name: true, profileImageUrl: true, basePrice: true, createdAt: true },
-    orderBy: { createdAt: "desc" },
+// Cleaner list with pagination
+app.get("/cleaners", async (req, res) => {
+  const page = parseInt(req.query.page as string) || 1;
+  const limit = parseInt(req.query.limit as string) || 10;
+  const skip = (page - 1) * limit;
+
+  const [cleaners, total] = await Promise.all([
+    prisma.user.findMany({
+      where: { role: "cleaner" },
+      select: { id: true, name: true, profileImageUrl: true, basePrice: true, createdAt: true },
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: limit,
+    }),
+    prisma.user.count({ where: { role: "cleaner" } })
+  ]);
+
+  res.json({
+    data: cleaners,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+      hasNext: page < Math.ceil(total / limit),
+      hasPrev: page > 1
+    }
   });
-  res.json(cleaners);
 });
 
 // Customer list

@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   FlatList,
   Image,
@@ -10,41 +10,73 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { api } from "../lib/api";
 
 type Cleaner = {
-  id: string;
+  id: number;
   name: string;
-  avatar: string;
-  region: string;
-  hourlyRate: number;
+  profileImageUrl: string | null;
+  basePrice: number | null;
+  city?: string | null;
+  district?: string | null;
 };
 
-const cleaners: Cleaner[] = [
-  {
-    id: "1",
-    name: "Ahmet",
-    avatar: "https://i.pravatar.cc/150?img=1",
-    region: "Kadıköy",
-    hourlyRate: 120,
-  },
-  {
-    id: "2",
-    name: "Ayşe",
-    avatar: "https://i.pravatar.cc/150?img=2",
-    region: "Beşiktaş",
-    hourlyRate: 100,
-  },
-  {
-    id: "3",
-    name: "Mehmet",
-    avatar: "https://i.pravatar.cc/150?img=3",
-    region: "Üsküdar",
-    hourlyRate: 90,
-  },
-];
+type PaginatedResponse = {
+  data: Cleaner[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasNext: boolean;
+    hasPrev: boolean;
+  };
+};
 
 export default function HomeScreen() {
   const router = useRouter();
+  const [cleaners, setCleaners] = useState<Cleaner[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [page, setPage] = useState(1);
+  const [hasMoreData, setHasMoreData] = useState(true);
+
+  useEffect(() => {
+    fetchCleaners(1, true);
+  }, []);
+
+  const fetchCleaners = async (pageNum: number, isRefresh = false) => {
+    if (isRefresh) {
+      setLoading(true);
+    } else {
+      setLoadingMore(true);
+    }
+
+    try {
+      const response = await api.get<PaginatedResponse>(`/cleaners?page=${pageNum}&limit=10`);
+      const newCleaners = response.data.data;
+      
+      if (isRefresh) {
+        setCleaners(newCleaners);
+      } else {
+        setCleaners(prev => [...prev, ...newCleaners]);
+      }
+      
+      setHasMoreData(response.data.pagination.hasNext);
+      setPage(pageNum);
+    } catch (error) {
+      console.error("Error fetching cleaners:", error);
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+    }
+  };
+
+  const loadMore = () => {
+    if (!loadingMore && hasMoreData) {
+      fetchCleaners(page + 1, false);
+    }
+  };
 
   const handleGoBack = async () => {
     // Gerekirse kullanıcı bilgilerini temizleyebilirsin
@@ -81,15 +113,23 @@ export default function HomeScreen() {
 
       <FlatList
         data={cleaners}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => item.id.toString()}
         contentContainerStyle={{ paddingBottom: 20 }}
         renderItem={({ item }) => (
           <View style={styles.card}>
-            <Image source={{ uri: item.avatar }} style={styles.avatar} />
+            <Image 
+              source={{ uri: item.profileImageUrl || "https://i.pravatar.cc/150?img=1" }} 
+              style={styles.avatar} 
+            />
             <View style={styles.info}>
               <Text style={styles.name}>{item.name}</Text>
-              <Text style={styles.region}>📍 {item.region}</Text>
-              <Text style={styles.rate}>Ücret: {item.hourlyRate}₺ / saat</Text>
+              <Text style={styles.region}>
+                📍 {item.district || "İstanbul"}
+                {item.city && item.district && `, ${item.city}`}
+              </Text>
+              <Text style={styles.rate}>
+                Ücret: {item.basePrice || 100}₺ / saat
+              </Text>
               <TouchableOpacity
                 style={styles.button}
                 onPress={() =>
@@ -103,6 +143,15 @@ export default function HomeScreen() {
             </View>
           </View>
         )}
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.1}
+        ListFooterComponent={() => 
+          loadingMore ? (
+            <View style={styles.loadingFooter}>
+              <Text style={styles.loadingText}>Yükleniyor...</Text>
+            </View>
+          ) : null
+        }
       />
     </SafeAreaView>
   );
@@ -179,5 +228,15 @@ const styles = StyleSheet.create({
     color: "#40b4e2",
     fontSize: 16,
     fontWeight: "600",
+  },
+  loadingFooter: {
+    paddingVertical: 20,
+    alignItems: "center",
+    backgroundColor: "#f4f6fc",
+  },
+  loadingText: {
+    fontSize: 14,
+    color: "#666",
+    fontStyle: "italic",
   },
 });
