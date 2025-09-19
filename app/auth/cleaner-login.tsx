@@ -14,7 +14,7 @@ import {
   View,
 } from "react-native";
 
-const API = "http://192.168.0.42:4000";
+const API = "http://10.25.0.135:4000";
 
 export default function LoginScreen() {
   const router = useRouter();
