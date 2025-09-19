@@ -1,0 +1,349 @@
+# MisGibiApp - Comprehensive AI Agent Project Documentation
+
+## PROJECT OVERVIEW
+MisGibiApp is a comprehensive cleaning services marketplace mobile application that connects customers with cleaners. The app enables users to register as either customers or cleaners, browse available services, make offers, and manage their profiles. It's built using React Native with Expo framework for the frontend and Node.js with Express and Prisma for the backend.
+
+## ARCHITECTURE & TECHNOLOGY STACK
+
+### Frontend (React Native + Expo)
+- Framework: React Native 19.1.0 with Expo SDK 54
+- Routing: Expo Router v6 with typed routes
+- Navigation: React Navigation v7 (Stack & Bottom Tabs)
+- State Management: React Hooks + AsyncStorage for persistence
+- UI Components: Custom styled components using StyleSheet
+- Media: Expo AV for video backgrounds, Expo Image for optimized images
+- Development: TypeScript, ESLint with Expo config
+
+### Backend (Node.js + Express)
+- Runtime: Node.js with TypeScript
+- Framework: Express.js v5
+- Database: SQLite with Prisma ORM
+- Authentication: JWT tokens with bcryptjs for password hashing
+- Validation: Zod for request/response validation
+- CORS: Enabled for cross-origin requests
+- Development: ts-node-dev for hot reloading
+
+### Database Schema (Prisma + SQLite)
+```prisma
+User {
+  id: Int (primary key)
+  email: String (unique)
+  passwordHash: String
+  role: Role (customer | cleaner)
+  name: String
+  profileImageUrl: String? (optional)
+  basePrice: Int? (for cleaners)
+  phone: String? (unique)
+  gender: Gender? (male | female)
+  city: String?
+  district: String?
+  street: String?
+  regions: Json? (array of service areas)
+  createdAt: DateTime
+
+  Relations:
+  - offersSent: Offer[] (as customer)
+  - offersReceived: Offer[] (as cleaner)
+}
+
+Offer {
+  id: String (cuid)
+  price: Int
+  note: String? (optional)
+  createdAt: DateTime
+  customerId: Int (foreign key)
+  cleanerId: Int (foreign key)
+
+  Relations:
+  - customer: User
+  - cleaner: User
+}
+```
+
+## PROJECT STRUCTURE
+
+### Root Directory
+```
+MisGibiApp/
+├── api/                     # Backend Express server
+├── app/                     # Frontend React Native app
+├── assets/                  # Static assets (images, videos)
+├── components/              # Reusable UI components
+├── constants/               # App constants and configurations
+├── hooks/                   # Custom React hooks
+├── scripts/                 # Build and utility scripts
+├── .expo/                   # Expo configuration and cache
+├── node_modules/            # Frontend dependencies
+├── package.json             # Frontend dependencies and scripts
+├── app.json                 # Expo app configuration
+├── App.tsx                  # Root app component (legacy, using Expo Router)
+├── tsconfig.json            # TypeScript configuration
+├── .env.local               # Environment variables
+└── README.md                # Project documentation
+```
+
+### API Directory Structure
+```
+api/
+├── src/
+│   ├── routes/
+│   │   ├── auth.ts          # Authentication endpoints
+│   │   ├── offers.ts        # Offer management endpoints
+│   │   └── profile.ts       # User profile endpoints
+│   ├── middleware/
+│   │   ├── auth.ts          # JWT authentication middleware
+│   │   └── role.ts          # Role-based access control
+│   ├── utils/
+│   │   └── jwt.ts           # JWT token utilities
+│   ├── server.ts            # Main Express server
+│   ├── email.ts             # Email utilities
+│   └── seed.ts              # Database seeding
+├── prisma/
+│   ├── schema.prisma        # Database schema
+│   └── dev.db               # SQLite database file
+├── package.json             # Backend dependencies and scripts
+├── tsconfig.json            # TypeScript configuration
+├── .env                     # Backend environment variables
+└── .gitignore               # Git ignore rules
+```
+
+### App Directory Structure (Expo Router)
+```
+app/
+├── auth/                    # Authentication screens
+│   ├── Welcome.tsx          # Landing page with role selection
+│   ├── cleaner-login.tsx    # Cleaner login screen
+│   ├── customer-login.tsx   # Customer login screen
+│   ├── cleaner-signup.tsx   # Cleaner registration
+│   ├── customer-signup.tsx  # Customer registration
+│   └── _layout.tsx          # Auth layout wrapper
+├── tabs/                    # Main tab navigation
+│   ├── index.tsx            # Home screen (cleaner list)
+│   ├── explore.tsx          # Explore/search screen
+│   └── _layout.tsx          # Tab layout configuration
+├── constants/
+│   ├── defaultAvatars.ts    # Default avatar configurations
+│   └── sehirler.ts          # Turkish cities data
+├── lib/
+│   └── api.ts               # API client configuration
+├── _layout.tsx              # Root layout
+├── index.tsx                # Entry point
+├── offer.tsx                # Offer creation screen
+└── +not-found.tsx           # 404 error screen
+```
+
+## KEY FEATURES & FUNCTIONALITY
+
+### 1. User Authentication & Registration
+- Dual role system: Customers and Cleaners
+- Email/password authentication with JWT tokens
+- Secure password hashing with bcryptjs
+- Role-based access control middleware
+- AsyncStorage for client-side session persistence
+
+### 2. User Profiles
+- Customer profiles: name, email, contact info, location
+- Cleaner profiles: includes base pricing, service areas (regions), profile images
+- Profile image support with default avatar fallbacks
+- Location data: city, district, street address
+
+### 3. Service Discovery
+- Paginated cleaner listings with infinite scroll
+- Search and filtering capabilities (planned)
+- Location-based service discovery
+- Price and rating display
+- Profile image galleries
+
+### 4. Offer System
+- Customers can send price offers to cleaners
+- Offer includes: price, optional notes, timestamp
+- Offer history tracking for both parties
+- Real-time offer notifications (planned)
+
+### 5. Geographic Features
+- Turkish cities and districts data
+- Location-based service matching
+- Service area (regions) configuration for cleaners
+- Google Maps integration (planned)
+
+### 6. Media & Assets
+- Video backgrounds for enhanced UX
+- Profile image management
+- Optimized image loading with Expo Image
+- Responsive design for multiple screen sizes
+
+## API ENDPOINTS
+
+### Authentication (/auth)
+- POST /auth/register - User registration (customer/cleaner)
+- POST /auth/login - User authentication
+
+### Users & Cleaners
+- GET /cleaners?page=1&limit=10 - Paginated cleaner list
+- GET /customers - Customer list
+- GET /users/grouped - Grouped users by role
+- GET /health - Health check endpoint
+
+### Offers (/offers)
+- POST /offers - Create new offer (authenticated)
+- GET /offers/for-cleaner/:cleanerId - Get offers for cleaner
+- GET /offers/by-customer/:customerId - Get customer's offers
+
+### Profile (/profile)
+- Profile management endpoints (implementation varies)
+
+## ENVIRONMENT CONFIGURATION
+
+### Frontend (.env.local)
+```
+EXPO_PUBLIC_API_URL=http://192.168.1.53:4000
+```
+
+### Backend (.env)
+```
+DATABASE_URL="file:./dev.db"
+JWT_SECRET="your-secret-key"
+PORT=4000
+```
+
+## DEVELOPMENT WORKFLOW
+
+### Frontend Development
+```bash
+npm install              # Install dependencies
+npm start               # Start Expo development server
+npm run android         # Run on Android
+npm run ios             # Run on iOS
+npm run web             # Run on web
+npm run lint            # Run ESLint
+```
+
+### Backend Development
+```bash
+cd api
+npm install             # Install dependencies
+npm run dev             # Start development server with hot reload
+npx prisma migrate dev  # Run database migrations
+npx prisma studio       # Open Prisma Studio
+```
+
+## DATABASE OPERATIONS
+
+### Prisma Commands
+```bash
+npx prisma generate     # Generate Prisma client
+npx prisma migrate dev  # Create and apply migrations
+npx prisma studio       # Database GUI
+npx prisma seed         # Run seed script
+```
+
+## SECURITY CONSIDERATIONS
+
+### Authentication Security
+- JWT tokens for stateless authentication
+- Password hashing with bcryptjs (salt rounds: 10)
+- Environment variables for sensitive data
+- Request validation with Zod schemas
+
+### API Security
+- CORS configuration for cross-origin requests
+- Input validation on all endpoints
+- Role-based access control middleware
+- SQL injection protection via Prisma ORM
+
+## CURRENT STATE & LIMITATIONS
+
+### Implemented Features
+✅ User registration and authentication
+✅ Dual role system (customer/cleaner)
+✅ Basic profile management
+✅ Cleaner discovery with pagination
+✅ Offer creation and management
+✅ Responsive UI with video backgrounds
+✅ AsyncStorage for offline data
+✅ TypeScript throughout the stack
+
+### Planned Features
+🔄 Real-time notifications
+🔄 Google Maps integration
+🔄 Advanced search and filtering
+🔄 Rating and review system
+🔄 Payment integration
+🔄 Chat/messaging system
+🔄 Service scheduling
+🔄 Photo galleries for completed work
+
+### Known Issues
+⚠️ Offer system currently uses AsyncStorage instead of API
+⚠️ Limited error handling in some components
+⚠️ Missing proper loading states in some screens
+⚠️ No real-time synchronization between devices
+
+## DEPLOYMENT CONSIDERATIONS
+
+### Frontend Deployment
+- Expo build for app stores (EAS Build)
+- Web deployment via Expo web output
+- Environment-specific configurations
+
+### Backend Deployment
+- Node.js hosting (Heroku, Railway, DigitalOcean)
+- Database migration to PostgreSQL/MySQL for production
+- Environment variable configuration
+- HTTPS/SSL certificate setup
+
+## CODE PATTERNS & CONVENTIONS
+
+### React Native Patterns
+- Functional components with hooks
+- Custom hooks for data fetching
+- StyleSheet for component styling
+- Expo Router for file-based routing
+- AsyncStorage for local persistence
+
+### Backend Patterns
+- Express router modules for organization
+- Middleware for cross-cutting concerns
+- Zod schemas for validation
+- Prisma for type-safe database operations
+- JWT for stateless authentication
+
+### File Naming Conventions
+- PascalCase for React components
+- camelCase for utilities and helpers
+- kebab-case for route files
+- Descriptive names for clarity
+
+## DEVELOPMENT BEST PRACTICES
+
+### Code Quality
+- TypeScript for type safety
+- ESLint for code consistency
+- Modular component architecture
+- Separation of concerns
+- Error boundary implementation
+
+### Performance
+- Lazy loading for screens
+- Image optimization with Expo Image
+- Pagination for large data sets
+- Efficient re-rendering with React.memo
+- Bundle size optimization
+
+## INTEGRATION POINTS
+
+### External Services (Planned)
+- Google Maps API for location services
+- Payment gateways (Stripe, PayPal)
+- Push notification services
+- Image storage (AWS S3, Cloudinary)
+- Email services for notifications
+
+### Internal Dependencies
+- Expo SDK for native functionality
+- React Navigation for routing
+- Prisma for database operations
+- JWT for authentication
+- AsyncStorage for client persistence
+
+This documentation provides a comprehensive understanding of the MisGibiApp project structure, architecture, and implementation details for AI agents to effectively work with the codebase.

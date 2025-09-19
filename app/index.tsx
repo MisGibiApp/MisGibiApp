@@ -1,21 +1,18 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useRouter } from "expo-router";
 import { View } from "react-native";
 
 export default function RootRedirect() {
   const router = useRouter();
-  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    // Stack mount olduktan sonra yönlendir
-    if (ready) {
+    // Immediately redirect to Welcome screen
+    const timer = setTimeout(() => {
       router.replace("/auth/Welcome");
-    }
-  }, [ready]);
+    }, 0);
 
-  useEffect(() => {
-    setReady(true);
-  }, []);
+    return () => clearTimeout(timer);
+  }, [router]);
 
-  return <View />;
+  return <View style={{ flex: 1, backgroundColor: "#fff" }} />;
 }

@@ -14,7 +14,7 @@ import {
   View,
 } from "react-native";
 
-const API = "http://192.168.0.42:4000";
+const API = process.env.EXPO_PUBLIC_API_URL as string;
 
 export default function LoginScreen() {
   const router = useRouter();
