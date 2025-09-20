@@ -114,6 +114,7 @@ export default function profileRoutes(prisma: PrismaClient) {
           profileImageUrl: true,
           gender: true,
           regions: true,
+          createdAt: true,
         },
       });
 
